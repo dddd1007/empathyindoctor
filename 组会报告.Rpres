@@ -1,0 +1,140 @@
+组会报告
+========================================================
+author: 夏骁凯
+date: 2016年12月07日
+autosize: true
+
+完成任务
+========================================================
+
+- 实验数据的分析
+- 近红外实验室在线预约系统的搭建
+- 认知控制功能大会的知识整理
+
+实验数据的分析
+===============
+- 整理与准备数据
+- 行为数据分析
+- 近红外数据分析
+
+数据整理与准备
+===========
+函数的编写
+前期数据整理(代码已隐藏)
+```{r, include=FALSE}
+library(rprime) #载入rprime包
+library(dplyr)
+library(stringr)
+
+experiment_data <- read_eprime("behavior/test1/fnirs-3-3.txt") #逐行读取eprime生成的txt文件
+experiment_data <- FrameList(experiment_data) #对数据转换为列表
+experiment_data <- drop_levels(experiment_data, 1)
+experiment_data <- filter_out(experiment_data, "Running", "practice")
+result1 <- to_data_frame(experiment_data)
+result <- select(result1, contains("Procedure"), contains("img" ), contains("RT"), contains("RESP"))
+Stim_Bar_H <- filter(result, Procedure == "LxProc1")
+Stim_Bar_E <- filter(result, Procedure == "LxProc2")
+Stim_needle_H <- filter(result, Procedure == "LxProc3")
+Stim_needle_E <- filter(result, Procedure == "LxProc4")
+#删除空白列
+Stim_Bar_H <- Stim_Bar_H[colSums(!is.na(Stim_Bar_H)) > 0]
+Stim_Bar_E <- Stim_Bar_E[colSums(!is.na(Stim_Bar_E)) > 0]
+Stim_needle_H <- Stim_needle_H[colSums(!is.na(Stim_needle_H)) > 0]
+Stim_needle_E <- Stim_needle_E[colSums(!is.na(Stim_needle_E)) > 0]
+
+names(Stim_Bar_H) <- NA
+names(Stim_Bar_E) <- NA
+names(Stim_needle_E) <- NA
+names(Stim_needle_H) <- NA
+
+
+extractData <- function(X) {
+  experiment_data <- read_eprime(X) #逐行读取eprime生成的txt文件
+  experiment_data <- FrameList(experiment_data) #对数据转换为列表
+  experiment_data <- drop_levels(experiment_data, 1)
+  experiment_data <- filter_out(experiment_data, "Running", "practice")
+  result1 <- to_data_frame(experiment_data)
+  result <- select(result1, Eprime.Basename,  contains("Procedure"), contains("img" ), contains("RT"), contains("RESP"), -contains("ImageDisplay4"), -contains("CRESP"))
+
+  Stim_Bar_H <- filter(result, Procedure == "LxProc1")
+  Stim_Bar_E <- filter(result, Procedure == "LxProc2")
+  Stim_needle_H <- filter(result, Procedure == "LxProc3")
+  Stim_needle_E <- filter(result, Procedure == "LxProc4")
+
+  #删除空白列
+  Stim_Bar_H <- Stim_Bar_H[colSums(!is.na(Stim_Bar_H)) > 0]
+  Stim_Bar_E <- Stim_Bar_E[colSums(!is.na(Stim_Bar_E)) > 0]
+  Stim_needle_H <- Stim_needle_H[colSums(!is.na(Stim_needle_H)) > 0]
+  Stim_needle_E <- Stim_needle_E[colSums(!is.na(Stim_needle_E)) > 0]
+
+  names(Stim_Bar_H) <- NA
+  names(Stim_Bar_E) <- NA
+  names(Stim_needle_E) <- NA
+  names(Stim_needle_H) <- NA
+
+  #整合数据
+  StimResult <- rbind(Stim_Bar_H, Stim_Bar_E, Stim_needle_H, Stim_needle_E)
+  names(StimResult) <- c("No.", "Proc", "img", "RTTime", "RT", "RESP")
+  return(StimResult)
+}
+
+path <- dir("behavior/test1/")[str_detect(dir("behavior/test1/"), ".txt")]
+StimResult <- as.data.frame(matrix(0, ncol = 6))
+names(StimResult) <- c("No.", "Proc", "img", "RTTime", "RT", "RESP")
+for(i in path){
+  go <- str_c("behavior/test1/",i)
+  StimResult <- rbind(StimResult, extractData(go))
+}
+
+StimResult <- StimResult[-1,]
+StimResult[StimResult == "a"] <- 1
+StimResult[StimResult == "s"] <- 2
+StimResult[StimResult == "d"] <- 3
+StimResult[StimResult == "f"] <- 4
+StimResult[StimResult == "j"] <- 5
+StimResult[StimResult == "k"] <- 6
+StimResult[StimResult == "l"] <- 7
+StimResult[StimResult == "{;}"] <- 8
+
+for(i in 1 : nrow(StimResult)){
+  StimResult[i,1] <- as.numeric(str_split(StimResult[i,1], "-")[[1]][2])
+}
+
+StimResult <- transform(StimResult, No. = as.numeric(unlist(StimResult$No.)),RT = as.numeric(unlist(StimResult$RT)), RESP = as.numeric(unlist(StimResult$RESP)))
+```
+
+对数据进行描述统计
+==========
+```{r}
+normal <- filter(StimResult, No. < 30)
+medicial <- filter(StimResult, No. > 30)
+```
+
+1. 反应时的描述统计
+===========
+```{r}
+library(psych)
+normalRT <- normal$RT[normal$RT != 0]
+medicRT <- medicial$RT[medicial$RT != 0]
+describe(normalRT)
+describe(medicRT)
+```
+
+反应时的分布
+=========
+```{r}
+hist(normalRT)
+```
+*****
+```{r}
+hist(medicRT)
+```
+
+2. 被试选择疼痛程度分数的描述统计
+==========
+```{r}
+describe(normal$RESP)
+describe(medicial$RESP)
+```
+
+疼痛程度

@@ -1,0 +1,415 @@
+---
+title: "对成像数据进行分析"
+output:
+  html_document: default
+  html_notebook: default
+  word_document: default
+---
+通过spm_fNIRS 工具箱中的 spm_fnirs_con2d 函数，对所有的数据转换成标准的 NIfTI-1 格式。随后使用 RNifti 包进行读取。
+
+```{r 建立分析环境}
+#install.packages("devtools")
+#devtools::install_github("jonclayden/RNifti")
+library(RNifti)
+library(tidyverse)
+library(stringr)
+library(R.matlab)
+
+extract_fNIRS_beta <- function(filename) {
+  beta_data <- readMat(filename)$S[1,,]$cbeta
+  return(beta_data)
+}
+
+#对 nii 文件绘制标准的热力图
+stand_heatmap <- function(nii_image){
+  image_vector <- as.numeric(nii_image)
+  dim_num <- dim(nii_image)
+  y <- sort(rep(1: dim_num[1], dim_num[1]),decreasing = F)
+  x <- rep(1:dim_num[2], dim_num[2])
+  image_table <- data.frame(image = image_vector, x = x, y = y)
+  library(ggplot2)
+  ggplot(data = image_table, aes(x = x, y = y, fill = image)) + geom_tile() + theme_bw() + scale_fill_distiller(palette = "Spectral") + coord_equal(ratio=0.7)
+}
+
+nii_convert_table <- function(nii_image){
+  image_vector <- as.numeric(nii_image)
+  dim_num <- dim(nii_image)
+  y <- sort(rep(1: dim_num[1], dim_num[1]),decreasing = F)
+  x <- rep(1:dim_num[2], dim_num[2])
+  image_table <- data.frame(image = image_vector, x = x, y = y)
+  return(image_table)
+}
+
+# 计算多个个体nii文件的均值矩阵
+mean_group_nii <- function(nii_list) {
+  dim_single <- dim(nii_list[[1]])
+  file_num <- length(nii_list)
+  dim_array <- c(dim_single, file_num)
+  total_array <- array(dim = dim_array)
+  for(i in 1:length(nii_list)){
+    total_array[,,i] <- matrix(as.numeric(nii_list[[i]]), nrow = dim_single[1], ncol = dim_single[2])
+  }
+
+  mean_matrix <- apply(total_array, MARGIN = 1:2, mean)
+
+  return(mean_matrix)
+}
+```
+
+## 实验1
+
+### 成像数据
+
+**普通人的成像结果**
+
+```{r 普通人}
+test1_nii <- dir("../../../Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1/", include.dirs = T, recursive = T)
+test1_nii <- test1_nii[stringr::str_detect(test1_nii, pattern = "nii")]
+test1_nii <- paste0("../../../Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1/", test1_nii)
+test1_con_01 <- test1_nii[stringr::str_detect(test1_nii, pattern = "con_0001.nii")]
+test1_con_02 <- test1_nii[stringr::str_detect(test1_nii, pattern = "con_0002.nii")]
+test1_con_03 <- test1_nii[stringr::str_detect(test1_nii, pattern = "con_0003.nii")]
+
+test1_con_01_images <- readNifti(test1_con_01)
+test1_con_02_images <- readNifti(test1_con_02)
+test1_con_03_images <- readNifti(test1_con_03)
+
+stand_heatmap(mean_group_nii(test1_con_01_images))
+stand_heatmap(mean_group_nii(test1_con_02_images))
+stand_heatmap(mean_group_nii(test1_con_03_images))
+```
+
+**医学生的成像结果**
+
+```{r 医学生}
+doctor_nii <- dir("../../../Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor/", include.dirs = T, recursive = T)
+doctor_nii <- doctor_nii[stringr::str_detect(doctor_nii, pattern = "nii")]
+doctor_nii <- paste0("../../../Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor/", doctor_nii)
+doctor_con_01 <- doctor_nii[stringr::str_detect(doctor_nii, pattern = "con_0001.nii")]
+doctor_con_02 <- doctor_nii[stringr::str_detect(doctor_nii, pattern = "con_0002.nii")]
+doctor_con_03 <- doctor_nii[stringr::str_detect(doctor_nii, pattern = "con_0003.nii")]
+
+doctor_con_01_images <- readNifti(doctor_con_01)
+doctor_con_02_images <- readNifti(doctor_con_02)
+doctor_con_03_images <- readNifti(doctor_con_03)
+
+stand_heatmap(mean_group_nii(doctor_con_01_images))
+stand_heatmap(mean_group_nii(doctor_con_02_images))
+stand_heatmap(mean_group_nii(doctor_con_03_images))
+```
+
+**不同被试的分片比较**
+```{r}
+facet_doctor <- nii_convert_table(mean_group_nii(doctor_con_02_images))
+facet_normal <- nii_convert_table(mean_group_nii(test1_con_02_images))
+facet_doctor <- cbind(facet_doctor, "医学生")
+names(facet_doctor)[4] <- "Class"
+facet_normal <- cbind(facet_normal, "非医学生")
+names(facet_normal)[4] <- "Class"
+facet_test1 <- rbind(facet_normal, facet_doctor)
+names(facet_test1)[1] <- "beta"
+
+library(ggplot2)
+p <- ggplot(data = facet_test1, aes(x = x, y = y, fill = beta)) + geom_tile() + scale_fill_distiller(palette = "Spectral") + coord_equal(ratio=0.7) + facet_grid(. ~Class) + theme(text = element_text(family = '微软雅黑'))
+
+ggsave(filename = "实验1脑功能模式差异.png" , plot = p, path = "/Users/eXrld/Dropbox/毕业设计/论文/图片/",width = 6, dpi = 300)
+```
+
+
+### 组间的假设检验
+```{r}
+#普通专业被试的 Block2 的 beta 值
+test1_doctor_files <- dir("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1", include.dirs = T, recursive = T)
+test1_doctor_con1 <- test1_doctor_files[stringr::str_detect(test1_doctor_files, pattern = "con_0001.mat")]
+test1_doctor_con2 <- test1_doctor_files[stringr::str_detect(test1_doctor_files, pattern = "con_0002.mat")]
+test1_doctor_con3 <- test1_doctor_files[stringr::str_detect(test1_doctor_files, pattern = "con_0003.mat")]
+
+test1_doctor_con1 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1/", test1_doctor_con1)
+test1_doctor_con2 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1/", test1_doctor_con2)
+test1_doctor_con3 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1/", test1_doctor_con3)
+
+test1_normal_beta1 <- matrix(NA, ncol = length(extract_fNIRS_beta(test1_doctor_con1[1])), nrow = length(test1_doctor_con1))
+for(i in 1:length(test1_doctor_con1)){
+  test1_normal_beta1[i,] <- extract_fNIRS_beta(test1_doctor_con1[i])
+}
+test1_normal_beta2 <- matrix(NA, ncol = length(extract_fNIRS_beta(test1_doctor_con2[1])), nrow = length(test1_doctor_con2))
+for(i in 1:length(test1_doctor_con2)){
+  test1_normal_beta2[i,] <- extract_fNIRS_beta(test1_doctor_con2[i])
+}
+test1_normal_beta3 <- matrix(NA, ncol = length(extract_fNIRS_beta(test1_doctor_con3[1])), nrow = length(test1_doctor_con3))
+for(i in 1:length(test1_doctor_con3)){
+  test1_normal_beta3[i,] <- extract_fNIRS_beta(test1_doctor_con3[i])
+}
+
+#医学专业被试的 Block2 的 beta 值
+test1_doctor_files <- dir("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor", include.dirs = T, recursive = T)
+test1_doctor_con1 <- test1_doctor_files[stringr::str_detect(test1_doctor_files, pattern = "con_0001.mat")]
+test1_doctor_con2 <- test1_doctor_files[stringr::str_detect(test1_doctor_files, pattern = "con_0002.mat")]
+test1_doctor_con3 <- test1_doctor_files[stringr::str_detect(test1_doctor_files, pattern = "con_0003.mat")]
+test1_doctor_con1 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor/", test1_doctor_con1)
+test1_doctor_con2 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor/", test1_doctor_con2)
+test1_doctor_con3 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor/", test1_doctor_con3)
+
+test1_doctor_beta1 <- matrix(NA, ncol = length(extract_fNIRS_beta(test1_doctor_con1[1])), nrow = length(test1_doctor_con1))
+for(i in 1:length(test1_doctor_con1)){
+  test1_doctor_beta1[i,] <- extract_fNIRS_beta(test1_doctor_con1[i])
+}
+test1_doctor_beta2 <- matrix(NA, ncol = length(extract_fNIRS_beta(test1_doctor_con2[1])), nrow = length(test1_doctor_con2))
+for(i in 1:length(test1_doctor_con2)){
+  test1_doctor_beta2[i,] <- extract_fNIRS_beta(test1_doctor_con2[i])
+}
+test1_doctor_beta3 <- matrix(NA, ncol = length(extract_fNIRS_beta(test1_doctor_con3[1])), nrow = length(test1_doctor_con3))
+for(i in 1:length(test1_doctor_con3)){
+  test1_doctor_beta3[i,] <- extract_fNIRS_beta(test1_doctor_con3[i])
+}
+
+test1_ttest1 <- data.frame(matrix(0, nrow = 45, ncol = 4))
+names(test1_ttest1) <- c("Ch", "p.value", "t.value", "sig.")
+for(i in 1:ncol(test1_doctor_beta1)){
+  a <- t.test(test1_normal_beta1[,i], test1_doctor_beta1[,i])
+  test1_ttest1[i,1] <- i
+  test1_ttest1[i,2] <- a$p.value
+  test1_ttest1[i,3] <- a$statistic
+  if(a$p.value < 0.05){
+    test1_ttest1[i,4] <- "**"
+  }
+}
+test1_ttest1
+
+test1_ttest2 <- data.frame(matrix(0, nrow = 45, ncol = 4))
+names(test1_ttest2) <- c("Ch", "p.value", "t.value", "sig.")
+for(i in 1:ncol(test1_doctor_beta2)){
+  a <- t.test(test1_normal_beta2[,i], test1_doctor_beta2[,i])
+  test1_ttest2[i,1] <- i
+  test1_ttest2[i,2] <- a$p.value
+  test1_ttest2[i,3] <- a$statistic
+  if(a$p.value < 0.05){
+    test1_ttest2[i,4] <- "**"
+  }
+}
+test1_ttest2
+
+test1_ttest3 <- data.frame(matrix(0, nrow = 45, ncol = 6))
+names(test1_ttest3) <- c("Ch", "p.value", "t.value", "sig.","mean of X", "mean of Y")
+for(i in 1:ncol(test1_doctor_beta3)){
+  a <- t.test(test1_normal_beta3[,i], test1_doctor_beta3[,i])
+  test1_ttest3[i,1] <- i
+  test1_ttest3[i,2] <- a$p.value
+  test1_ttest3[i,3] <- a$statistic
+  if(a$p.value < 0.05){
+    test1_ttest3[i,4] <- "**"
+  }
+  test1_ttest3[i,5] <- a$estimate[[1]]
+  test1_ttest3[i,6] <- a$estimate[[2]]
+}
+test1_ttest3
+```
+
+
+## 实验2
+
+### 读取数据
+
+对要分析的数据进行读取
+
+```{r}
+test2_nii <- dir("../../../Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test2/", include.dirs = T, recursive = T)
+
+test2_nii <- test2_nii[stringr::str_detect(test2_nii, pattern = "nii")]
+now_path <- getwd()
+#setwd("../../../Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test2/")
+
+test2_nii <- paste0("../../../Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test2/", test2_nii)
+
+con_01 <- test2_nii[stringr::str_detect(test2_nii, pattern = "con_0001.nii")]
+con_02 <- test2_nii[stringr::str_detect(test2_nii, pattern = "con_0002.nii")]
+con_03 <- test2_nii[stringr::str_detect(test2_nii, pattern = "con_0003.nii")]
+con_04 <- test2_nii[stringr::str_detect(test2_nii, pattern = "con_0004.nii")]
+con_05 <- test2_nii[stringr::str_detect(test2_nii, pattern = "con_0005.nii")]
+
+con_01_images <- readNifti(con_01)
+con_02_images <- readNifti(con_02)
+con_03_images <- readNifti(con_03)
+con_04_images <- readNifti(con_04)
+con_05_images <- readNifti(con_05)
+
+mean_group_nii <- function(nii_list) {
+  dim_single <- dim(nii_list[[1]])
+  file_num <- length(nii_list)
+  dim_array <- c(dim_single, file_num)
+  total_array <- array(dim = dim_array)
+  for(i in 1:length(nii_list)){
+    total_array[,,i] <- matrix(as.numeric(nii_list[[i]]), nrow = dim_single[1], ncol = dim_single[2])
+  }
+  
+  mean_matrix <- apply(total_array, MARGIN = 1:2, mean)
+  
+  return(mean_matrix)
+}
+
+stand_heatmap(mean_group_nii(con_01_images))
+stand_heatmap(mean_group_nii(con_02_images))
+stand_heatmap(mean_group_nii(con_03_images))
+stand_heatmap(mean_group_nii(con_04_images))
+stand_heatmap(mean_group_nii(con_05_images))
+
+#分片进行比较
+level_1_image <- cbind(nii_convert_table(mean_group_nii(con_01_images)),"level 1")
+level_2_image <- cbind(nii_convert_table(mean_group_nii(con_02_images)),"level 2")
+level_3_image <- cbind(nii_convert_table(mean_group_nii(con_03_images)),"level 3")
+
+names(level_1_image)[4] <- "level"
+names(level_2_image)[4] <- "level"
+names(level_3_image)[4] <- "level"
+
+test2_table <- rbind(level_1_image, level_2_image, level_3_image)
+names(test2_table)[1] <- "beta"
+test2_table %>% 
+  filter(level != "level 2") %>% 
+  ggplot(aes(x = x, y = y, fill = beta)) + geom_tile() + scale_fill_distiller(palette = "Spectral") + coord_equal(ratio=0.7) + facet_grid(. ~ level)
+ggsave(filename = "实验2三水平下脑功能模式差异.png" , plot = p, path = "/Users/eXrld/Dropbox/毕业设计/论文/图片/",width = 7, dpi = 300)
+```
+
+随后对各成像数据进行统计分析，首先取出三种条件下各通道的 beta 值。
+
+```{r}
+test2_beta <- dir("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test2/", include.dirs = T, recursive = T) 
+
+test2_con_01 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test2/",test2_beta[stringr::str_detect(test2_beta,pattern = "con_0001.mat")])
+test2_con_02 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test2/",test2_beta[stringr::str_detect(test2_beta,pattern = "con_0002.mat")])
+test2_con_03 <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test2/",test2_beta[stringr::str_detect(test2_beta,pattern = "con_0003.mat")])
+
+test2_con_01_beta <- matrix(0, ncol = length(extract_fNIRS_beta(test2_con_01[1])), nrow = length(test2_con_01))
+test2_con_02_beta <- matrix(0, ncol = length(extract_fNIRS_beta(test2_con_01[1])), nrow = length(test2_con_01))
+test2_con_03_beta <- matrix(0, ncol = length(extract_fNIRS_beta(test2_con_01[1])), nrow = length(test2_con_01))
+
+for(i in 1:length(test2_con_01)){
+  test2_con_01_beta[i,] <- extract_fNIRS_beta(test2_con_01[i])
+}
+
+for(i in 1:length(test2_con_01)){
+  test2_con_02_beta[i,] <- extract_fNIRS_beta(test2_con_02[i])
+}
+
+for(i in 1:length(test2_con_01)){
+  test2_con_03_beta[i,] <- extract_fNIRS_beta(test2_con_03[i])
+}
+```
+
+取出各通道 beta 值后，通过方差分析比较其差异。
+```{r}
+test2_con_01_beta <- cbind(test2_con_01_beta, rep(1, 11))
+test2_con_02_beta <- cbind(test2_con_02_beta, rep(2, 11))
+test2_con_03_beta <- cbind(test2_con_03_beta, rep(3, 11))
+
+test2_beta_table <- data.frame(rbind(test2_con_01_beta, test2_con_02_beta, test2_con_03_beta))
+names(test2_beta_table)[46] <- "Group"
+names(test2_beta_table)[1:45] <- paste0("Ch", 1:45)
+test2_aov_table <- data.frame(matrix(0, ncol = 3, nrow = 45))
+names(test2_aov_table) <- c("Ch", "P.value", "Sig.")
+for(i in 1:45){
+test2_aov_table$Ch[i] <- i
+test2_aov_table$P.value[i] <- summary(aov(test2_beta_table[,i] ~ Group, data = test2_beta_table))[[1]]$`Pr(>F)`[1]
+if(summary(aov(test2_beta_table[,i] ~ Group, data = test2_beta_table))[[1]]$`Pr(>F)`[1] < 0.05){
+  test2_aov_table$Sig.[i] <- "***"
+  }
+}
+test2_aov_table
+
+test2_beta_table[c(41,46)] %>% 
+  group_by(Group) %>% 
+  summarise(mean = mean(Ch41)) %>% 
+  filter(Group != 2) %>% 
+  ggplot(aes(x = Group, y = mean, fill = factor(Group))) + geom_histogram(stat = "identity") -> p
+  
+ggsave(filename = "实验2三水平下通道41差异.png" , plot = p, path = "/Users/eXrld/Dropbox/毕业设计/论文/图片/",width = 7, dpi = 300)
+
+test2_ttest_table1 <- data.frame(matrix(0, nrow = 45, ncol = 3))
+names(test2_ttest_table1) <- c("Ch", "p.value", "sig.")
+for(i in 1:45){
+  test2_ttest_table1[i,1] <- i
+  test2_ttest_table1[i,2] <- t.test(test2_con_01_beta[,i], test2_con_03_beta[,i], paired = TRUE)$p.value
+  if(t.test(test2_con_01_beta[,i], test2_con_03_beta[,i], paired = TRUE)$p.value < 0.05){
+    test2_ttest_table1[i,3] <- "**"
+  }
+}
+test2_ttest_table1
+```
+
+## 比较成像结果
+
+1. 比较实验 1 医学专业被试、非医学专业被试的成像结果与 实验 2 中任务1、任务3的成像结果
+```{r 比较实验 1 医学专业被试、非医学专业被试的成像结果与 实验 2 中任务1、任务3的成像结果}
+head(facet_test1)
+head(test2_table)
+
+facet_test1_2 <- cbind(facet_test1, "实验 1 ")
+facet_test2_2 <- cbind(test2_table, "实验 2 ")
+
+names(facet_test1_2)[5] <- "Exp"
+names(facet_test2_2)[4:5] <- c("Class","Exp")
+
+facet_total <- rbind(facet_test1_2, facet_test2_2)
+facet_total$Class <- plyr::revalue(facet_total$Class, replace = c("非医学生" = "level 1", "医学生" = "level 3"))
+p <- facet_total %>% 
+  filter(Class != "level 2") %>% 
+  ggplot(aes(x = x, y = y, fill = beta)) + geom_tile() + scale_fill_distiller(palette = "Spectral") + coord_equal(ratio=0.7) + facet_grid(Exp ~ Class) + theme(text = element_text(family = '微软雅黑'))
+ggsave(filename = "真·实验1与实验2成像比较.png" , plot = p, path = "/Users/eXrld/Dropbox/毕业设计/论文/图片/",width = 8, dpi = 300)
+```
+
+2. MCPA交叉相关矩阵
+#```{r}
+#实验1：
+test1_mean <- apply(test1_normal_beta, 2, mean) - apply(test1_doctor_beta,2, mean)
+
+#实验2：
+test2_mean <- apply(test2_con_03_beta[,1:45], 2, mean) - apply(test2_con_01_beta[,1:45], 2, mean)
+
+test2_mean2 <- apply(test2_con_02_beta[,1:45], 2, mean) - apply(test2_con_01_beta[,1:45], 2, mean)
+
+cor(test1_mean, test2_mean)
+cor(test1_mean, test2_mean2)
+
+for(i in 1:45){
+  print(cor(a[i], b[i]))
+} 
+#```
+
+3. 医学专业人员脑功能活动与实验2第三任务的脑功能活动模式独立样本 t 检验
+```{r}
+test1_doctor_beta <- as.data.frame(test1_doctor_beta2)
+test2_con_01_beta <- as.data.frame(test2_con_01_beta[,1:45])
+gettable <- data.frame(matrix(0, ncol = 4, nrow = 45))
+for(i in 1:45){
+  a <- t.test(test1_doctor_beta[,i], test2_con_01_beta[i])
+  gettable[i,1] <- i
+  gettable[i,2] <- a$p.value
+  gettable[i,3] <- a$statistic
+  if(a$p.value < 0.05){
+    gettable[i,4] <- "**"
+  }
+}
+
+gettable
+
+test1_doctor_beta <- as.data.frame(test1_doctor_beta3)
+test2_con_01_beta <- as.data.frame(test2_con_01_beta[,1:45])
+gettable <- data.frame(matrix(0, ncol = 4, nrow = 45))
+for(i in 1:45){
+  a <- t.test(test1_doctor_beta[,i], test2_con_01_beta[i])
+  gettable[i,1] <- i
+  gettable[i,2] <- a$p.value
+  gettable[i,3] <- a$statistic
+  if(a$p.value < 0.05){
+    gettable[i,4] <- "**"
+  }
+}
+gettable
+
+select(as.data.frame(test1_doctor_beta2),  V20,V35, V37) %>% 
+  sapply(FUN = mean)
+
+select(as.data.frame(test2_con_03_beta),  V20,V35, V37) %>% 
+  sapply(FUN = mean)
+```
+

@@ -1,0 +1,28 @@
+---
+title: "在R Markdown文档中使用中文"
+author:
+  - 谢益辉
+  - 邱怡轩
+  - 于淼
+documentclass: ctexart
+output:
+  rticles::ctex:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+classoption: "hyperref,"
+---
+
+% latex table generated in R 3.3.2 by xtable 1.8-2 package
+% Fri Jan 20 13:43:54 2017
+\begin{table}[ht]
+\centering
+\begin{tabular}{rlrrrrr}
+  \hline
+ & factor(doctor) & 观点采择 & 共情性关心 & 个人痛苦 & 想象力 & 总分 \\ 
+  \hline
+1 & 0 & 10.00 & 11.38 & 11.25 & 10.25 & 43.12 \\ 
+  2 & 1 & 10.87 & 11.10 & 8.74 & 9.94 & 40.52 \\ 
+   \hline
+\end{tabular}
+\end{table}

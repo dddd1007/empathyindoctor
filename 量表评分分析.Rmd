@@ -1,0 +1,53 @@
+---
+title: "量表分析"
+output: html_notebook
+---
+对收集到的数据根据答案改变评分为数字：
+```{r}
+library(tidyverse)
+for(i in 2 : 23){
+  question[[i]] <- plyr::revalue(question[[i]], replace = c("不恰当" = 0, "有一点恰当" = 1, "还算恰当" = 2, "恰当" = 3, "很恰当" = 4))
+}
+
+question$doctor <- plyr::revalue(question$doctor, replace = c("是" = 1, "否" = 0))
+
+#改变数据的类型
+question[2:23] <- apply(question[2:23], MARGIN = 2, as.character)
+question[2:23] <- apply(question[2:23], MARGIN = 2, as.numeric)
+```
+
+
+对收集到的量表数据进行分析。
+
+对单个项目的分数进行计算。
+
+```{r}
+question <- question %>% 
+  mutate(观点采择 = V6 + V9 + V15 + V19 + V22, 
+         个人痛苦 = V4 + V8 + V13 + V18 + V21,
+         想象力 = V3 + V5 + V10 + V12 + V17 + V20,
+         共情性关心 = V1 + V2 + V7 + V12 + V14 + V16,
+         Total = V1+V2+V3+V4+V5+V6+V7+V8+V9+V10+V11+V12+V13+V14+V15+V16+V17+V18+V19+V20+V21+V22) 
+question %>% 
+  group_by(factor(doctor)) %>% 
+  summarise(观点采择 = mean(观点采择), 共情性关心 = mean(共情性关心), 个人痛苦 = mean(个人痛苦), 想象力 = mean(想象力), 总分 = mean(Total)) #%>% 
+  xtable()
+```
+
+对两组数据进行置换检验：
+```{r}
+doctor <- filter(question, doctor == 1)
+normal <- filter(question, doctor == 0)
+for(i in 25:29){
+  print(t.test(doctor[, i], normal[,i]))
+}
+```
+
+对数据进行假设检验
+```{r}
+for(i in 25:29){
+  xtable(t.test(doctor[, i], normal[,i]))
+}
+```
+
+

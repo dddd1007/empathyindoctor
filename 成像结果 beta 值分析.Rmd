@@ -1,0 +1,67 @@
+---
+title: "成像结果的beta值分析"
+output: html_notebook
+---
+```{r}
+library(tidyverse)
+```
+
+## 实验1
+
+### 读取数据
+
+1. 读取非医学专业被试数据并寻找激活区域
+```{r}
+normal_dir <- dir("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1", recursive = T, include.dirs = T)
+normal_dir
+normal_files <- normal_dir[stringr::str_detect(normal_dir, pattern = "con_0002.mat")]
+normal_files <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/test1/",normal_files)
+
+#先读一个试试看
+temp_a <- R.matlab::readMat(normal_files[1])
+temp_a$S[,,1]$cbeta %>% 
+  dim()
+
+test1_normal <- array(dim = c(length(normal_files), 45))
+
+for(i in 1:length(normal_files)){
+  test1_normal[i,] <- R.matlab::readMat(normal_files[i])$S[,,1]$cbeta
+}
+
+test1_normal
+
+test1_normal_mean <- apply(test1_normal, MARGIN = 2, mean)
+which(test1_normal_mean > 0)
+```
+
+所以激活通道在`r which(test1_normal_mean > 0)`，对应的区域为背外侧前额叶皮层、额极区、额下回后部、缘上回、辅助躯体感觉皮层与角回，其中有`r 3 + 4 + 2 `个通道对应背外侧前额叶皮层，因此该皮层区域具有重要的作用。
+
+2. 读取并分析医学专业被试
+
+```{r}
+doctor_dir <- dir("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor/", recursive = T, include.dirs = T)
+doctor_dir
+doctor_files <- doctor_dir[stringr::str_detect(doctor_dir, pattern = "con_0002.mat")]
+doctor_files <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/SPM处理结果/doctor/",doctor_files)
+
+#先读一个试试看
+temp_a <- R.matlab::readMat(doctor_files[1])
+temp_a$S[,,1]$cbeta %>% 
+  dim()
+
+test1_doctor <- array(dim = c(length(doctor_files), 45))
+
+for(i in 1:length(doctor_files)){
+  test1_doctor[i,] <- R.matlab::readMat(doctor_files[i])$S[,,1]$cbeta
+}
+
+test1_doctor
+
+test1_doctor_mean <- apply(test1_doctor, MARGIN = 2, mean)
+which(test1_doctor_mean > 0)
+stringr::str_split_fixed(which(test1_doctor_mean > 0), pattern = " ", n = 1) %>% 
+  as.vector() %>% 
+  cat(paste0(.,"，"))
+```
+
+而我们在对医学专业被试进行脑血氧变化测量时，发现激活的通道包括`r which(test1_doctor_mean > 0)`，即兴趣区的广泛激活。因此在实验当中，医学专业被试的躯体感觉皮层与额叶均有较为积极的参与。

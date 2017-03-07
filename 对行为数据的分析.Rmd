@@ -1,0 +1,73 @@
+---
+title: "对行为数据的分析"
+output:
+  html_notebook: default
+  html_document: default
+  word_document: default
+---
+
+对行为数据的统计分析。
+
+```{r 导入数据}
+library(tidyverse)
+library(stringr)
+exp_data <- read.csv("behavior/test1.csv", header = T)
+exp_data <- unite(exp_data, col = img, level1img, level2img, level3img, level4img)
+exp_data <- unite(exp_data, col = RESP, rate1.RESP, rate2.RESP, rate3.RESP, rate4.RESP)
+exp_data$RESP <- str_extract(exp_data$RESP, pattern = "[asdfjkl;]")
+exp_data$img <- str_extract(exp_data$img, pattern = "[BDSM]/")
+exp_data$img <- str_sub(exp_data$img, start = 1, end = -2)
+exp_data <- select(exp_data, Subject, img, Procedure, RESP)
+
+#对行为数据进行转换
+exp_data$RESP <- plyr::revalue(exp_data$RESP, replace = c("a" = 1, "s" = 2, "d" = 3, "f" = 4, "j" = 5, "k" = 6, "l" = 7, ";" = 8))
+exp_data <- na.omit(exp_data)
+stim <- plyr::revalue(exp_data$img, replace = c("B" = 0 , "D" = 0, "S" = 1, "M" = 1))
+exp_data <- cbind(exp_data, stim)
+doctor <- exp_data %>% 
+  filter(Subject > 25) %>% 
+  mutate(doctor = 1)
+normal <- exp_data %>% 
+  filter(Subject < 25) %>% 
+  mutate(doctor = 0)
+
+all_data <- rbind(doctor, normal)
+
+all_data$RESP <- as.numeric(as.character(all_data$RESP))
+```
+
+对数据进行描述统计
+```{r}
+all_data %>% 
+  group_by(doctor, stim) %>% 
+  summarise(mean = mean(RESP), sd = sd(RESP))
+```
+
+对数据进行假设检验并绘图
+```{r}
+no_needle <- all_data %>% 
+  filter(stim == 0)
+needle <- all_data %>% 
+  filter(stim == 1, Subject != c(38))
+
+doctor_needle <- filter(needle, doctor == 1)
+normal_needle <- filter(needle, doctor == 0)
+t.test(doctor_needle$RESP, normal_needle$RESP)
+
+doctor_no_needle <- filter(no_needle, doctor == 1)
+normal_no_needle <- filter(no_needle, doctor == 0)
+t.test(doctor_no_needle$RESP, normal_no_needle$RESP)
+
+library(tidyverse)
+needle %>% 
+  group_by(doctor) %>% 
+  summarize(mean = mean(RESP)) %>% 
+  ggplot(aes(x = factor(doctor), y = mean, fill = factor(doctor))) + geom_histogram(stat = "identity")
+```
+
+对假设检验进行功效分析
+```{r}
+pwr::pwr.t.test(n = 19, sig.level = 0.002726, power = 0.9)
+```
+
+
