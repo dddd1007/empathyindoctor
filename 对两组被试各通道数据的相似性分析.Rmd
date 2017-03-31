@@ -1,0 +1,36 @@
+---
+title: "对两组被试各通道数据的相似性分析"
+output: html_notebook
+---
+
+## 1. 导入数据
+```{r}
+library(readr)
+
+# 第二组被试的非医学专业被试数据
+doctor_file <- dir("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/txtfile/test2", include.dirs = T, recursive = T)
+doctor_file <- doctor_file[stringr::str_detect(doctor_file, pattern = "sub(..|.).TXT")]
+doctor_file <- paste0("/Users/eXrld/Dropbox/毕业设计/实验数据/仪器数据/txtfile/test2/",doctor_file)
+
+normals <- list()
+
+for(i in 1:length(doctor_file)){
+  normals[[i]] <- read_delim("~/Dropbox/毕业设计/实验数据/仪器数据/txtfile/test2/convert/sub1/sub1.TXT", "\t", escape_double = FALSE, trim_ws = TRUE, skip = 34)
+}
+```
+
+## 2. 取出各时间窗的数据
+```{r}
+time_windows <- function(nirs_data = NA, start_scans = NA, end_scans = NA) {
+  block_number <- length(start_scans)
+  result <- list()
+  for(i in 1 : block_number){
+    result[[i]] <- nirs_data[start_scans[i]:end_scans[i], ]
+  }
+  
+  return(result)
+}
+
+
+```
+
